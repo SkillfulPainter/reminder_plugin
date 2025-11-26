@@ -1,0 +1,88 @@
+{
+  "manifest_version": 1,
+  "name": "智能提醒插件 (Smart Reminder Plugin)",
+  "version": "1.0.0",
+  "description": "一个功能强大的智能提醒系统，支持私聊和群聊中的定时提醒，到时间自动发送提醒消息",
+  "author": {
+    "name": "SkillfulPainter",
+    "url": "https://github.com/SkillfulPainter"
+  },
+  "license": "GPL-v3.0-or-later",
+  
+  "host_application": {
+    "min_version": "0.8.0"
+  },
+  "homepage_url": "https://github.com/SkillfulPainter/reminder_plugin",
+  "repository_url": "https://github.com/SkillfulPainter/reminder_plugin",
+  "keywords": ["reminder", "notification", "schedule", "timer", "alarm", "group", "private", "at"],
+  "categories": ["Utility", "Productivity", "Communication"],
+  
+  "default_locale": "zh-CN",
+  "locales_path": "_locales",
+  
+  "plugin_info": {
+    "is_built_in": false,
+    "plugin_type": "utility",
+    "components": [
+      {
+        "type": "action",
+        "name": "set_reminder",
+        "description": "设置个人提醒事项，到时间后提醒自己",
+        "activation_modes": ["keyword"],
+        "keywords": ["提醒", "叫我", "记得", "别忘了"],
+        "chat_types": ["private", "group"],
+        "parameters": {
+          "remind_time": "提醒时间",
+          "event_details": "提醒内容"
+        }
+      },
+      {
+        "type": "action",
+        "name": "set_group_reminder",
+        "description": "在群聊中设置提醒事项，到时间后@指定用户",
+        "activation_modes": ["keyword"],
+        "keywords": ["提醒", "叫我", "记得", "别忘了"],
+        "chat_types": ["group"],
+        "parameters": {
+          "target_user_name": "需要提醒的用户名",
+          "target_user_id": "需要提醒的用户ID (可选，优先级更高)",
+          "remind_time": "提醒时间",
+          "event_details": "提醒内容"
+        }
+      }
+    ],
+    "features": [
+      "智能时间解析，支持自然语言时间表达",
+      "私聊提醒功能，提醒自己",
+      "群聊@提醒功能，提醒群内其他用户",
+      "后台提醒服务，即使对话未启动也能发送提醒",
+      "数据库持久化存储，程序重启后提醒不丢失",
+      "提醒状态管理，支持标记完成状态",
+      "时间窗口查询，在回复中自然融入提醒内容",
+      "多种提醒触发方式，关键词激活",
+      "灵活的配置选项，可启用/禁用功能"
+    ],
+    "dependencies": {
+      "database": true,
+      "background_service": true,
+      "chat_api": true,
+      "send_api": true,
+      "llm_api": true
+    },
+    "configuration": {
+      "config_file": "config.toml",
+      "config_schema": {
+        "plugin": {
+          "name": "reminder_plugin",
+          "version": "1.0.0",
+          "enabled": true,
+          "config_version": "1.0"
+        },
+        "components": {
+          "action_set_reminder_enable": true,
+          "action_set_group_reminder_enable": true
+        }
+      }
+    }
+  }
+}

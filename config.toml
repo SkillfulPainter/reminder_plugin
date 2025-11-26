@@ -1,0 +1,39 @@
+# reminder_plugin - 自动生成的配置文件
+# 一个功能强大的智能提醒系统，支持私聊和群聊中的定时提醒，到时间自动发送提醒消息
+
+# 插件基本信息
+[plugin]
+
+# 插件名称
+name = "reminder_plugin"
+
+# 插件版本
+version = "1.1.0"
+
+# 是否启用插件
+enabled = true
+
+# 配置版本
+config_version = "1.1"
+
+
+# 功能开关
+[components]
+
+# 是否启用定时提醒功能
+action_set_reminder_enable = true
+
+
+# 调度器高级设置
+[reminder_settings]
+
+# 后台扫描数据库的时间间隔(秒)，默认12小时
+scheduler_scan_interval = 3600
+
+# 预加载内存的任务时间窗口(秒)，默认24小时。过大会占用更多内存，过小可能导致频繁数据库读取。
+scheduler_lookahead_window = 86400
+
+# 设置提醒成功后，是否发送确认消息(如:好的，已设置...)
+send_confirmation = true
+
+
