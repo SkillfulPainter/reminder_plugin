@@ -67,8 +67,8 @@ class DatabaseReminderTask(AsyncTask):
             logger.info(f"[ReminderTask] 触发提醒: {self.event_details}")
 
             # 3. 生成拟人化回复 (逻辑参考自 plugin.py，但不直接 import)
-            person_id = person_api.get_person_id_by_name(self.user_name)
-            person_nickname = person_api.get_person_value(person_id, "person_name")
+            person_id = await person_api.get_person_id_by_name(self.user_name)
+            person_nickname = await person_api.get_person_value(person_id, "person_name")
             extra_info = f"**现在是提醒时间，请你以一种符合你人设的的方式巧妙地提醒 {person_nickname}。\n提醒内容: {self.event_details}**"
 
             # 调用 rewrite_reply 进行润色
