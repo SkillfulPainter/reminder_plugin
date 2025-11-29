@@ -1,9 +1,12 @@
 import datetime
 import json
 import time
-from typing import ClassVar
+from typing import ClassVar, Optional
 import asyncio
+import requests
 from dateutil.parser import parse as parse_datetime
+from maim_message import GroupInfo
+
 from src.manager.async_task_manager import AsyncTask, async_task_manager
 from src.common.database.database_model import ActionRecords # 确保引入数据库模型
 from src.chat.message_receive.chat_stream import ChatStream
@@ -16,6 +19,7 @@ from src.plugin_system import (
     ConfigField,
     register_plugin,
 )
+
 from src.plugin_system.apis import database_api, generator_api, llm_api, send_api, person_api
 
 logger = get_logger("reminder_plugin")
@@ -33,7 +37,8 @@ class DatabaseReminderTask(AsyncTask):
             user_id: str,
             user_name: str,
             event_details: str,
-            creator_name: str
+            creator_name: str,
+            group_id: Optional[str] = None
     ):
         # 使用 action_id 作为任务名的后缀，防止重复
         super().__init__(task_name=f"db_reminder_{action_id}")
@@ -44,6 +49,7 @@ class DatabaseReminderTask(AsyncTask):
         self.user_name = user_name
         self.event_details = event_details
         self.creator_name = creator_name
+        self.group_id = group_id
 
     async def run(self):
         try:
@@ -65,11 +71,42 @@ class DatabaseReminderTask(AsyncTask):
                 return
 
             logger.info(f"[ReminderTask] 触发提醒: {self.event_details}")
+            if self.group_id and _plugin_instance:
+                try:
+                    napcat_url = _plugin_instance.get_config("napcat.url")
+                    ACCESS_TOKEN = _plugin_instance.get_config("napcat.token")
+                    if napcat_url and ACCESS_TOKEN:
+                        # 构造 NapCat / OneBot 11 的请求 Payload
+                        url = f"{napcat_url}/send_group_msg"
+                        payload = {
+                            "group_id": self.group_id,
+                            "message": [
+                                {
+                                    "type": "at",
+                                    "data": {
+                                        "qq": self.user_id
+                                    }
+                                }
+                            ]
+                        }
+                        headers = {
+                            'Authorization': f"Bearer {ACCESS_TOKEN}",
+                            'Content-Type': 'application/json'
+                        }
 
-            # 3. 生成拟人化回复 (逻辑参考自 plugin.py，但不直接 import)
-            person_id = await person_api.get_person_id_by_name(self.user_name)
+                        logger.debug(f"[ReminderTask] 正在通过 HTTP 发送群聊 At: {url}, payload: {payload}")
+
+                        response = requests.post(url, json=payload, headers=headers, timeout=5)
+                        response.raise_for_status()
+                        logger.info(f"[ReminderTask] At 消息发送成功: {response.text}")
+                    # 稍微停顿一下，确保At消息先到达
+                    await asyncio.sleep(0.5)
+                except Exception as e:
+                    logger.error(f"[ReminderTask] 发送At消息失败: {e}", exc_info=True)
+            person_id = person_api.get_person_id("qq", self.user_id)
+            print(person_id)
             person_nickname = await person_api.get_person_value(person_id, "person_name")
-            extra_info = f"**现在是提醒时间，请你以一种符合你人设的的方式巧妙地提醒 {person_nickname}。\n提醒内容: {self.event_details}**"
+            extra_info = f"**现在是提醒时间，请你以一种符合你人设的的方式**巧妙**地提醒 {person_nickname}。\n提醒内容: {self.event_details}**"
 
             # 调用 rewrite_reply 进行润色
             # 这会利用 Expressor 根据人设和历史记录重写这句话
@@ -169,6 +206,17 @@ class ReminderScheduler(AsyncTask):
                                     stream_id=record["chat_id"],
                                     platform=record["chat_info_platform"]
                                 )
+
+                                # 尝试从数据中获取群组信息并注入 stream
+                                group_id = data.get("group_id")
+                                group_platform = data.get("platform")
+
+                                if group_id:
+                                    temp_stream.group_info = GroupInfo(
+                                        group_id=group_id,
+                                        platform=group_platform or record["chat_info_platform"],
+                                        group_name="Group"  # 数据库未存群名，暂时给默认值
+                                    )
                                 # 填充 group_info 如果是群聊 (简单判断逻辑，视具体数据结构而定)
                                 # 如果你的 record 数据里存了 group_id 可以这里恢复，否则默认为私聊或通用处理
 
@@ -179,7 +227,8 @@ class ReminderScheduler(AsyncTask):
                                     user_id=data["user_id"],
                                     user_name=data["user_name"],
                                     event_details=data["event_details"],
-                                    creator_name=data["user_name"]  # 简化，默认创建者是用户自己
+                                    creator_name=data["user_name"],  # 简化，默认创建者是用户自己
+                                    group_id=group_id
                                 )
 
                                 await async_task_manager.add_task(task)
@@ -300,17 +349,29 @@ class RemindAction(BaseAction):
 
             # 生成唯一ID
             action_id = str(int(time.time() * 1000000))
+            # [新增] 提取群组信息
+            group_id = None
+            group_platform = None
+            if self.chat_stream.group_info:
+                group_id = self.chat_stream.group_info.group_id
+                group_platform = self.chat_stream.group_info.platform
+
+            # [修改] 将群组信息写入 action_data 字典
+            data_dict = {
+                "user_id": str(self.user_id),
+                "user_name": str(self.user_nickname),
+                "event_details": str(event_details),
+                "remind_time": target_time.timestamp(),
+            }
+            if group_id:
+                data_dict["group_id"] = group_id
+                data_dict["group_platform"] = group_platform
 
             record_data = {
                 "action_id": action_id,
                 "time": time.time(),
                 "action_name": "reminder_item",
-                "action_data": json.dumps({
-                    "user_id": str(self.user_id),
-                    "user_name": str(self.user_nickname),
-                    "event_details": str(event_details),
-                    "remind_time": target_time.timestamp(),
-                }),
+                "action_data": json.dumps(data_dict),
                 "action_done": False,  # 初始状态为未完成
                 "action_build_into_prompt": False,
                 "action_prompt_display": f"提醒事项: {event_details} (提醒时间: {target_time.strftime('%Y-%m-%d %H:%M:%S')})",
@@ -395,7 +456,8 @@ class RemindAction(BaseAction):
                 user_id=str(self.user_id),
                 user_name=str(self.user_nickname),
                 event_details=str(event_details),
-                creator_name=str(self.user_nickname)
+                creator_name=str(self.user_nickname),
+                group_id=group_id
             )
             await async_task_manager.add_task(reminder_task)
         # Fallback message
@@ -462,6 +524,12 @@ class ReminderPlugin(BasePlugin):
             "version": ConfigField(type=str, default="1.1.0", description="插件版本"),  # 版本号升级
             "enabled": ConfigField(type=bool, default=True, description="是否启用插件"),
             "config_version": ConfigField(type=str, default="1.1", description="配置版本"),
+        },
+        "napcat": {
+            "url": ConfigField(type=str, default="http://127.0.0.1:3000",
+                               description="NapCat HTTP API地址 (不带尾部斜杠)"),
+            "token": ConfigField(type=str, default="123456789",
+                               description="NapCat HTTP API TOKEN"),
         },
         "components": {
             "action_set_reminder_enable": ConfigField(type=bool, default=True, description="是否启用定时提醒功能"),

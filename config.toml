@@ -17,6 +17,15 @@ enabled = true
 config_version = "1.1"
 
 
+[napcat]
+
+# NapCat HTTP API地址 (不带尾部斜杠)
+url = "http://127.0.0.1:3000"
+
+# NapCat HTTP API TOKEN
+token = "123456789"
+
+
 # 功能开关
 [components]
 
@@ -34,6 +43,6 @@ scheduler_scan_interval = 3600
 scheduler_lookahead_window = 86400
 
 # 设置提醒成功后，是否发送确认消息(如:好的，已设置...)
-send_confirmation = true
+send_confirmation = false
 
 
