@@ -5,7 +5,7 @@ from typing import ClassVar, Optional
 import asyncio
 import requests
 from dateutil.parser import parse as parse_datetime
-from maim_message import GroupInfo
+from maim_message import UserInfo, GroupInfo
 
 from src.manager.async_task_manager import AsyncTask, async_task_manager
 from src.common.database.database_model import ActionRecords # 确保引入数据库模型
@@ -181,6 +181,7 @@ class ReminderScheduler(AsyncTask):
 
                             data = json.loads(record["action_data"])
                             remind_time = data.get("remind_time", 0)
+                            print(data)
 
                             if remind_time < (now - 5):
                                 logger.warning(
@@ -199,17 +200,24 @@ class ReminderScheduler(AsyncTask):
                             if remind_time <= future_limit:
                                 delay = remind_time - now
 
+                                # 尝试从数据中获取群组信息并注入 stream
+                                group_id = data.get("group_id")
+                                group_platform = data.get("platform")
+
+                                user_info = UserInfo(
+                                    user_id=data["user_id"],
+                                    user_nickname=data["user_name"],
+                                    platform=group_platform or record["chat_info_platform"]
+                                )
+
                                 # 构建 ChatStream (从记录中恢复最基础的流信息)
                                 # 注意：这里是一个简化构建，实际可能需要更完整的上下文恢复，
                                 # 但用于发送消息通常足够了
                                 temp_stream = ChatStream(
                                     stream_id=record["chat_id"],
-                                    platform=record["chat_info_platform"]
+                                    platform=record["chat_info_platform"],
+                                    user_info=user_info
                                 )
-
-                                # 尝试从数据中获取群组信息并注入 stream
-                                group_id = data.get("group_id")
-                                group_platform = data.get("platform")
 
                                 if group_id:
                                     temp_stream.group_info = GroupInfo(
