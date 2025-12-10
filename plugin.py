@@ -55,7 +55,7 @@ class DatabaseReminderTask(AsyncTask):
         try:
             # 1. 倒计时
             if self.delay > 0:
-                logger.info(f"[ReminderTask] 任务 {self.action_id} 进入等待，时长: {self.delay:.2f}s")
+                logger.info(f"[ReminderTask] 任务 {self.event_details} 进入等待，时长: {self.delay:.2f}s")
                 await asyncio.sleep(self.delay)
 
             # 2. 二次检查数据库 (Double Check)
@@ -67,7 +67,7 @@ class DatabaseReminderTask(AsyncTask):
                 filters={"action_id": self.action_id, "action_done": False}
             )
             if not records:
-                logger.info(f"[ReminderTask] 任务 {self.action_id} 已失效或被完成，跳过执行。")
+                logger.info(f"[ReminderTask] 任务 {self.event_details} 已失效或被完成，跳过执行。")
                 return
 
             logger.info(f"[ReminderTask] 触发提醒: {self.event_details}")
@@ -138,7 +138,7 @@ class DatabaseReminderTask(AsyncTask):
                 filters={"action_id": self.action_id},
                 data={"action_done": True}
             )
-            logger.info(f"[ReminderTask] 任务 {self.action_id} 完成并更新数据库。")
+            logger.info(f"[ReminderTask] 任务 {self.event_details} 完成并更新数据库。")
 
         except Exception as e:
             logger.error(f"[ReminderTask] 执行失败: {e}", exc_info=True)
@@ -181,7 +181,6 @@ class ReminderScheduler(AsyncTask):
 
                             data = json.loads(record["action_data"])
                             remind_time = data.get("remind_time", 0)
-                            print(data)
 
                             if remind_time < (now - 5):
                                 logger.warning(
